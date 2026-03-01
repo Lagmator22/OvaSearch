@@ -32,12 +32,14 @@ OvaSearch combines several state-of-the-art technologies:
 ## Installation
 
 ### 1. Clone the repository
+
 ```bash
 git clone https://github.com/lagmator22/OvaSearch.git
 cd OvaSearch
 ```
 
 ### 2. Set up Python environment
+
 ```bash
 python3 -m venv env
 source env/bin/activate  # On Windows: env\Scripts\activate
@@ -45,17 +47,24 @@ pip install openvino openvino-genai optimum-intel
 ```
 
 ### 3. Download models
+
 ```bash
 python pull_model.py
 ```
+
 This downloads and converts the required models to OpenVINO format (~2GB total).
 
 ### 4. Build the application
+
+The build system auto-detects your Python environment, OpenVINO installation, and required libraries. No manual path configuration needed.
+
 ```bash
 mkdir build && cd build
 cmake ..
 make -j4  # Or: ninja
 ```
+
+> **Note:** On first build, CMake will automatically clone the OpenVINO GenAI C++ headers (~shallow clone) if they are not already present.
 
 ## Usage
 
@@ -150,20 +159,29 @@ echo "Test content" > data/test.txt
 ## Troubleshooting
 
 ### Models not loading
+
 Ensure models are downloaded:
+
 ```bash
 ls models/
 # Should show: Llama-3.2-3B-Instruct-INT4, bge-small-en-v1.5, Qwen2-VL-2B-Instruct-INT4
 ```
 
 ### Build errors
+
 Check OpenVINO installation:
+
 ```bash
 python -c "import openvino; print(openvino.__version__)"
+python -c "import openvino_genai; print('GenAI OK')"
 ```
 
+If CMake can't find packages, ensure you activated the venv before running cmake.
+
 ### Memory issues
+
 Reduce chunk size in `main.cpp`:
+
 ```cpp
 auto chunks = create_sliding_window_chunks(content, 500, 100);  // Smaller chunks
 ```
