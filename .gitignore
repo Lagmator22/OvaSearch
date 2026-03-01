@@ -1,0 +1,59 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+*.dylib
+ovasearch
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+env/
+venv/
+*.egg-info/
+dist/
+
+# Models (large files)
+models/
+
+# Data and cache
+data/
+.ovasearch_cache/
+logs/
+
+# IDE and OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Backups
+data_backup/
+data_images_backup/
+*.backup
+*.bak
+*_backup.*
+*_v2.*
+
+# Test results
+stress_test_results.json
+
+# AI/IDE metadata
+.claude/
+
+# OpenVINO GenAI local source (large, fetched separately)
+openvino.genai/
