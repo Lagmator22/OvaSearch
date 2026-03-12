@@ -1,9 +1,9 @@
-# OvaSearch — Performance Benchmark Report
+# OvaSearch: Performance Benchmark Report
 
 **System**: Native C++ Multimodal RAG Engine  
 **Runtime**: Intel OpenVINO (CPU inference, no Python runtime)  
 **Date**: March 12, 2026  
-**Platform**: macOS, Apple Silicon (M-series)
+**Platform**: macOS, Apple Silicon (M2 Pro chip)
 
 ---
 
@@ -76,7 +76,7 @@ The benchmark runs **100 consecutive prompts** (20 unique queries × 5 iteration
 | **Startup** | Models loaded once, cached embeddings | Re-imports on every run |
 | **Inference call path** | Direct OpenVINO C++ API calls | Python → C++ bridge overhead per call |
 | **Resource control** | Manual memory management, RAII | GC pauses, unpredictable memory spikes |
-| **AIPC suitability** | ✅ Strict resource budgets | ❌ Hard to guarantee memory bounds |
+| **AIPC suitability** | Strict resource budgets | Hard to guarantee memory bounds |
 
 ### Key Architectural Decisions
 
@@ -104,13 +104,13 @@ The engine ran all 100 queries in a **single continuous session** with no crashe
 
 ## Features Demonstrated
 
-- ✅ **Text retrieval** — Direct filename-aware + semantic search
-- ✅ **Image understanding** — VLM-based image captioning and search
-- ✅ **Multimodal RAG** — Combine text + image sources in single answer
-- ✅ **Document ingestion** — PDF/DOCX/PPTX auto-extraction
-- ✅ **Persistent caching** — Binary embedding cache with file-level invalidation
-- ✅ **Hot reload** — `reload` command re-indexes without restart
-- ✅ **Source citation** — Every answer cites source files
+- **Text retrieval** — Direct filename-aware + semantic search
+- **Image understanding** — VLM-based image captioning and search
+- **Multimodal RAG** — Combine text + image sources in single answer
+- **Document ingestion** — PDF/DOCX/PPTX auto-extraction
+- **Persistent caching** — Binary embedding cache with file-level invalidation
+- **Hot reload** — `reload` command re-indexes without restart
+- **Source citation** — Every answer cites source files
 
 ---
 
@@ -131,4 +131,4 @@ python3 run_stress_test.py
 
 ---
 
-*OvaSearch — Native C++ Multimodal RAG, powered by Intel OpenVINO.*
+*OvaSearch - Native C++ Multimodal RAG, powered by Intel OpenVINO.*
