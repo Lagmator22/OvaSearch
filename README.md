@@ -2,6 +2,9 @@
 
 A high-performance multimodal RAG (Retrieval-Augmented Generation) system built in native C++ with Intel OpenVINO for hardware acceleration.
 
+
+> New to the code? [docs/CODE_TOUR.md](docs/CODE_TOUR.md) is a plain-language walkthrough of main.cpp; [ARCHITECTURE.md](ARCHITECTURE.md) has the diagrams.
+
 ## Features
 
 - **Multimodal Search**: Seamlessly query across text documents and images

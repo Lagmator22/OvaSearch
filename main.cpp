@@ -1,4 +1,5 @@
-// OvaSearch - Multimodal RAG System
+// OvaSearch - Native C++ Multimodal RAG Engine
+// Version 1.0.0
 // GSoC 2026 - OpenVINO Project
 
 #include <algorithm>
@@ -247,11 +248,22 @@ bool load_cache(const std::string &cache_dir, std::vector<std::string> &chunks,
     return false;
   uint32_t count = 0;
   ef.read(reinterpret_cast<char *>(&count), sizeof(count));
+  if (!ef.good())
+    return false;
+  // Trust nothing from disk: the header must match the actual file size,
+  // or a corrupted cache could ask for gigabytes of allocations.
+  std::error_code size_ec;
+  const auto emb_size = fs::file_size(emb_path, size_ec);
+  if (size_ec ||
+      emb_size != sizeof(count) + (uint64_t)count * EMB_DIM * sizeof(float))
+    return false;
   embeddings.resize(count);
   for (uint32_t i = 0; i < count; ++i) {
     embeddings[i].resize(EMB_DIM);
     ef.read(reinterpret_cast<char *>(embeddings[i].data()),
             EMB_DIM * sizeof(float));
+    if (ef.gcount() != (std::streamsize)(EMB_DIM * sizeof(float)))
+      return false;
   }
   return chunks.size() == count && sources.size() == count;
 }
@@ -315,14 +327,24 @@ void load_documents(const std::string &data_folder,
   auto old_manifest = load_manifest(cache_dir);
   std::vector<std::vector<float>> all_embeddings;
 
-  // Find deleted and modified files
+  // Find deleted and modified files. Both need their cached chunks dropped:
+  // deleted files because they're gone, modified files because their new
+  // content is re-processed below (otherwise stale chunks duplicate).
   std::set<std::string> deleted_files;
   for (const auto &[old_path, old_mtime] : old_manifest) {
-    if (new_manifest.find(old_path) == new_manifest.end()) {
+    auto now_it = new_manifest.find(old_path);
+    if (now_it == new_manifest.end()) {
       deleted_files.insert(old_path);
       if (verbose) {
         std::cout << ROSE << "    \xe2\x9c\x97 " << RESET << GRAY
                   << fs::path(old_path).filename().string() << " (removed)"
+                  << RESET << "\n";
+      }
+    } else if (now_it->second != old_mtime) {
+      deleted_files.insert(old_path);
+      if (verbose) {
+        std::cout << GOLD << "    \xe2\x86\xbb " << RESET << GRAY
+                  << fs::path(old_path).filename().string() << " (modified)"
                   << RESET << "\n";
       }
     }
@@ -547,8 +569,8 @@ void auto_convert_documents(const fs::path &base_path,
     for (const auto &orphan : orphans) {
       fs::remove(orphan);
       std::cout << ROSE << "    \xe2\x9c\x97 " << RESET << GRAY
-                << orphan.filename().string() << " (orphaned, removed)"
-                << RESET << "\n";
+                << orphan.filename().string() << " (orphaned, removed)" << RESET
+                << "\n";
     }
   }
 
@@ -574,8 +596,10 @@ void auto_convert_documents(const fs::path &base_path,
               << RESET << "\n";
     std::cout << GRAY << "    Detected PDF/DOCX/PPTX files, extracting text..."
               << RESET << "\n";
-    std::string cmd =
-        "cd " + base_path.string() + " && python3 prepare_documents.py 2>&1";
+    // Quote the path: project dirs with spaces would otherwise split the
+    // command (and shell metacharacters in a path must never be interpreted).
+    std::string cmd = "cd '" + base_path.string() +
+                      "' && python3 prepare_documents.py 2>&1";
     int ret = system(cmd.c_str());
     if (ret == 0)
       std::cout << GREEN << "    \xe2\x9c\x93 Document extraction complete"
@@ -604,8 +628,8 @@ void auto_convert_documents(const fs::path &base_path,
         }
       }
       std::cout << GREEN << "    \xe2\x86\xa6 " << RESET << GRAY
-                << doc.filename().string()
-                << " \xe2\x86\x92 data_backup/" << RESET << "\n";
+                << doc.filename().string() << " \xe2\x86\x92 data_backup/"
+                << RESET << "\n";
     }
   }
 }
@@ -613,11 +637,11 @@ void auto_convert_documents(const fs::path &base_path,
 bool is_image_source(const std::string &src) {
   std::string s = to_lower(src);
   size_t len = s.size();
-  return (len > 4 && (s.substr(len - 4) == ".jpg" ||
-                      s.substr(len - 4) == ".png" ||
-                      s.substr(len - 4) == ".bmp")) ||
-         (len > 5 && (s.substr(len - 5) == ".jpeg" ||
-                      s.substr(len - 5) == ".webp"));
+  return (len > 4 &&
+          (s.substr(len - 4) == ".jpg" || s.substr(len - 4) == ".png" ||
+           s.substr(len - 4) == ".bmp")) ||
+         (len > 5 &&
+          (s.substr(len - 5) == ".jpeg" || s.substr(len - 5) == ".webp"));
 }
 
 // Extract mentioned filenames from the user query for source-targeted retrieval
@@ -659,10 +683,12 @@ extract_mentioned_files(const std::string &query,
 
 int main(int argc, char *argv[]) {
   print_banner();
+  try {
   fs::path base_path = fs::current_path();
   if (!fs::exists(base_path / "models")) {
     std::cerr << ROSE << "  Error: models/ directory not found.\n"
-              << "  Run from the OvaSearch project directory or ensure models are downloaded.\n"
+              << "  Run from the OvaSearch project directory or ensure models "
+                 "are downloaded.\n"
               << RESET;
     return 1;
   }
@@ -775,12 +801,12 @@ int main(int argc, char *argv[]) {
                                   chunk_sources[i] + "]";
               if (is_image_source(chunk_sources[i]))
                 context_block +=
-                    label + " (Image)\nDescription: " +
-                    document_chunks[i] + "\n\n";
+                    label + " (Image)\nDescription: " + document_chunks[i] +
+                    "\n\n";
               else
                 context_block +=
-                    label + " (Text file)\nContent: " +
-                    document_chunks[i] + "\n\n";
+                    label + " (Text file)\nContent: " + document_chunks[i] +
+                    "\n\n";
             }
             cited_sources.insert(chunk_sources[i]);
             relevant_count++;
@@ -812,12 +838,12 @@ int main(int argc, char *argv[]) {
                                 chunk_sources[doc_id] + "]";
             if (is_image_source(chunk_sources[doc_id]))
               context_block +=
-                  label + " (Image)\nDescription: " +
-                  document_chunks[doc_id] + "\n\n";
+                  label + " (Image)\nDescription: " + document_chunks[doc_id] +
+                  "\n\n";
             else
               context_block +=
-                  label + " (Text file)\nContent: " +
-                  document_chunks[doc_id] + "\n\n";
+                  label + " (Text file)\nContent: " + document_chunks[doc_id] +
+                  "\n\n";
           }
           cited_sources.insert(chunk_sources[doc_id]);
           relevant_count++;
@@ -881,23 +907,23 @@ int main(int argc, char *argv[]) {
           "Context:\n" +
           context_block +
           [&]() -> std::string {
-            if (cited_sources.size() > 1) {
-              std::string hint = "Retrieved sources: ";
-              bool first = true;
-              for (const auto &src : cited_sources) {
-                if (!first)
-                  hint += ", ";
-                hint += src;
-                hint += is_image_source(src) ? " (image)" : " (text)";
-                first = false;
-              }
-              return hint + ". Address each source.\n";
-            }
-            return std::string();
-          }() +
-          "\nQuestion: " + query +
-          "<|eot_id|>"
-          "<|start_header_id|>assistant<|end_header_id|>\n\n";
+        if (cited_sources.size() > 1) {
+          std::string hint = "Retrieved sources: ";
+          bool first = true;
+          for (const auto &src : cited_sources) {
+            if (!first)
+              hint += ", ";
+            hint += src;
+            hint += is_image_source(src) ? " (image)" : " (text)";
+            first = false;
+          }
+          return hint + ". Address each source.\n";
+        }
+        return std::string();
+      }() +
+                       "\nQuestion: " + query +
+                       "<|eot_id|>"
+                       "<|start_header_id|>assistant<|end_header_id|>\n\n";
     }
 
     std::cout << "    ";
@@ -915,4 +941,13 @@ int main(int argc, char *argv[]) {
   }
   std::cout << "\n" << GRAY << "  Goodbye." << RESET << "\n\n";
   return 0;
+  } catch (const std::exception &e) {
+    // Model folders missing or corrupt are the usual cause here. Fail with
+    // a readable message instead of an unhandled-exception abort.
+    std::cerr << "\n" << ROSE << "  Fatal: " << e.what() << RESET << "\n"
+              << GRAY << "  Check that models/ contains bge-small-en-v1.5, "
+                 "Qwen2-VL-2B-Instruct-INT4 and Llama-3.2-3B-Instruct-INT4\n"
+              << "  (run pull_model.py to download them)." << RESET << "\n";
+    return 1;
+  }
 }
