@@ -6,7 +6,7 @@ import os
 
 import numpy as np
 
-DEFAULT_MODEL = os.environ.get("PRISM_MODEL", "nomic-ai/CodeRankEmbed")
+DEFAULT_MODEL = os.environ.get("PRISM_MODEL", "Salesforce/SFR-Embedding-Code-400M_R")
 
 # Query prefixes from the model cards. Documents get no prefix for these models.
 QUERY_PREFIX = {

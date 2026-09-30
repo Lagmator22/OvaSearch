@@ -109,7 +109,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--rev", action="append",
                    help="git commit/tag/branch (repeatable). Default: HEAD, or the working "
                         "tree for a non git folder")
-    p.add_argument("--model", default=None, help="embedding model (default: CodeRankEmbed)")
+    p.add_argument("--model", default=None, help="embedding model (default: SFR-Embedding-Code-400M_R)")
     p.set_defaults(fn=cmd_index)
 
     p = sub.add_parser("search", help="search an indexed revision")

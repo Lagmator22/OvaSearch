@@ -211,7 +211,12 @@ class IndexStore:
             self._save_vectors()
         entry = {"label": label, "sha": sha, "n_files": len(files), "n_chunks": len(chunks),
                  "indexed_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-        self.meta["revisions"] = [r for r in self.meta["revisions"] if r["sha"] != sha] + [entry]
+        revs = self.meta["revisions"]
+        pos = next((i for i, r in enumerate(revs) if r["sha"] == sha), None)
+        if pos is None:
+            revs.append(entry)
+        else:
+            revs[pos] = entry  # re-indexing keeps the revision's place in the list
         self.meta["default_sha"] = sha
         self._save_meta()
         return {"label": label, "sha": sha, "files": len(files), "chunks": len(chunks),
@@ -276,7 +281,8 @@ class IndexStore:
         """Search the union of all indexed revisions and group near-duplicates.
 
         A family is one symbol (same name) whose versions are identical or have
-        cosine similarity >= sim_threshold to the best scoring version.
+        cosine similarity >= sim_threshold to the best scoring version. Each
+        revision contributes at most one version (the one closest to the best).
         """
         revs = self.revisions()
         if not revs:
@@ -299,22 +305,30 @@ class IndexStore:
             best = h.chunk
             if best["hash"] in taken:
                 continue
-            members = [best["hash"]]
+            sim = {best["hash"]: 1.0}
+            # Module level windows of one file look alike, so they need the same
+            # path and a stricter threshold than named functions/classes.
             generic = best["kind"] in ("module", "window")
-            cands = [x for x in by_symbol.get(best["symbol"], []) if x != best["hash"]]
+            thr = max(sim_threshold, 0.985) if generic else sim_threshold
+            cands = [x for x in by_symbol.get(best["symbol"], [])
+                     if x != best["hash"] and x not in taken]
             if generic:
                 cands = [x for x in cands if unique[x]["path"] == best["path"]]
             if cands:
                 bv = self.vectors_for([best["hash"]])[0]
-                sims = self.vectors_for(cands) @ bv
-                members += [x for x, s in zip(cands, sims) if s >= sim_threshold]
-            members = [m for m in members if m not in taken]
-            taken.update(members)
-            versions = []
-            for m in members:
-                sim = 1.0 if m == best["hash"] else float(
-                    self.vectors_for([m])[0] @ self.vectors_for([best["hash"]])[0])
-                versions.append({"chunk": unique[m], "revs": in_revs[m], "sim_to_best": sim})
+                for x, s in zip(cands, self.vectors_for(cands) @ bv):
+                    if s >= thr:
+                        sim[x] = float(s)
+            # Each revision contributes at most one version: its closest chunk.
+            chosen: dict[str, list[str]] = {}
+            for r in revs:
+                have = [m for m in sim if r["label"] in in_revs[m]]
+                if have:
+                    m = max(have, key=lambda x: sim[x])
+                    chosen.setdefault(m, []).append(r["label"])
+            taken.update(sim)
+            versions = [{"chunk": unique[m], "revs": rl, "sim_to_best": sim[m]}
+                        for m, rl in sorted(chosen.items(), key=lambda kv: -sim[kv[0]])]
             families.append({"best": best, "score": h.score, "dense": h.dense,
                              "versions": versions})
             if len(families) >= k:

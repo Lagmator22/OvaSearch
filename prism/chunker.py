@@ -128,6 +128,9 @@ def _js_defs(node, src, prefix, out):
             expr = target.named_children[0] if target.named_children else None
             if expr is not None and expr.type == "assignment_expression":
                 right = expr.child_by_field_name("right")
+                # a.x = a.y = function () {} : look through the chained assignment
+                while right is not None and right.type == "assignment_expression":
+                    right = right.child_by_field_name("right")
                 if right is not None and right.type in FUNC_VALUES:
                     left = _text(expr.child_by_field_name("left"), src)
                     out.append((child, prefix + left, "function"))

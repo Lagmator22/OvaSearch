@@ -2,7 +2,7 @@
 
 A temporary git repo is built from tests/fixtures/sample_repo with two commits:
 v1 is the fixture as is, v2 edits computeTotal and adds a new file.
-The embedding model is real (CodeRankEmbed by default, override with PRISM_MODEL).
+The embedding model is real (SFR-Embedding-Code-400M_R by default, override with PRISM_MODEL).
 """
 
 import shutil
@@ -86,6 +86,12 @@ def test_js_arrow_function_and_python_chunks():
     assert {"slugify", "levenshtein", "WordCounter", "WordCounter.add",
             "WordCounter.most_common"} <= set(py)
     assert py["WordCounter.add"].kind == "method"
+
+
+def test_js_chained_assignment_function():
+    src = "res.contentType = res.type = function contentType(type) {\n  return this;\n};\n"
+    chunks = chunk_file("lib/response.js", src)
+    assert [(c.symbol, c.kind) for c in chunks] == [("res.contentType", "function")]
 
 
 def test_fallback_for_unparseable_and_other_files():
@@ -174,3 +180,7 @@ def test_all_versions_groups_near_duplicates(store, embedder):
     hp = next(f for f in fams if f["best"]["symbol"] == "hashPassword")
     # Unchanged function: one version present in both revisions.
     assert len(hp["versions"]) == 1 and hp["versions"][0]["revs"] == ["v1", "v2"]
+    # A revision is listed at most once per family.
+    for f in fams:
+        revs = [r for v in f["versions"] for r in v["revs"]]
+        assert len(revs) == len(set(revs))
