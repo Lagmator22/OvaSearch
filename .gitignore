@@ -57,3 +57,8 @@ stress_test_results.json
 
 # OpenVINO GenAI local source (large, fetched separately)
 openvino.genai/
+# prism (Python code retrieval)
+.venv-prism/
+.prism_index/
+prism/eval/runs/*.log
+.pytest_cache/
